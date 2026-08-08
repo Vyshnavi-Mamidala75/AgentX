@@ -25,22 +25,40 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'AI Interview Agent API' });
 });
 
-// Serve frontend static build if present
-const publicPaths = [
-  path.resolve(__dirname, '../dist/public'),
+// Locate static frontend build directory
+const possiblePublicDirs = [
   path.resolve(process.cwd(), 'dist/public'),
   path.resolve(__dirname, 'public'),
+  path.resolve(__dirname, '../dist/public'),
+  path.resolve(__dirname, '../public'),
 ];
 
-for (const p of publicPaths) {
-  if (fs.existsSync(p)) {
-    app.use(express.static(p));
-    app.use((req, res, next) => {
-      if (req.path.startsWith('/api')) return next();
-      res.sendFile(path.join(p, 'index.html'));
-    });
+let publicDir: string | null = null;
+for (const dir of possiblePublicDirs) {
+  if (fs.existsSync(path.join(dir, 'index.html'))) {
+    publicDir = dir;
     break;
   }
+}
+
+if (publicDir) {
+  console.log(`[AgentX] Serving static frontend from: ${publicDir}`);
+  app.use(express.static(publicDir));
+
+  // Explicit root handler
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(publicDir!, 'index.html'));
+  });
+
+  // Fallback for client-side routing
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api') || req.path === '/health' || req.method !== 'GET') {
+      return next();
+    }
+    res.sendFile(path.join(publicDir!, 'index.html'));
+  });
+} else {
+  console.warn('[AgentX] Frontend build (dist/public/index.html) not found. Run npm run build:frontend');
 }
 
 if (process.env.NODE_ENV !== 'test') {
