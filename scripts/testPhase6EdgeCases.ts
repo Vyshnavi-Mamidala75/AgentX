@@ -1,15 +1,17 @@
+process.env.NODE_ENV = 'test';
 import { CandidateLoader } from '../src/loaders/candidateLoader.js';
 import { app } from '../src/server.js';
 import { Server } from 'node:http';
+import { AddressInfo } from 'node:net';
 
 async function testEdgeCaseFlow() {
   console.log('======================================================================');
   console.log('         PHASE 6: EDGE CASES VERIFICATION TEST                        ');
   console.log('======================================================================\n');
 
-  const PORT = 3066;
-  const server: Server = app.listen(PORT);
-  const baseUrl = `http://localhost:${PORT}/api/interview`;
+  const server: Server = app.listen(0);
+  const port = (server.address() as AddressInfo).port;
+  const baseUrl = `http://localhost:${port}/api/interview`;
 
   try {
     const rawCandidates = CandidateLoader.getInstance().loadAllRawCandidates();

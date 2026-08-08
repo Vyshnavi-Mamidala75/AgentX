@@ -1,6 +1,8 @@
+process.env.NODE_ENV = 'test';
 import { CandidateLoader } from '../src/loaders/candidateLoader.js';
 import { app } from '../src/server.js';
 import { Server } from 'node:http';
+import { AddressInfo } from 'node:net';
 
 async function testCandidateFeedback(baseUrl: string, candidateId: string, candidateAnswers: string[]) {
   const loader = CandidateLoader.getInstance();
@@ -38,9 +40,9 @@ async function main() {
   console.log('       PHASE 4: FEEDBACK & SCORECARD GENERATION VERIFICATION          ');
   console.log('======================================================================\n');
 
-  const PORT = 3077;
-  const server: Server = app.listen(PORT);
-  const baseUrl = `http://localhost:${PORT}/api/interview`;
+  const server: Server = app.listen(0);
+  const port = (server.address() as AddressInfo).port;
+  const baseUrl = `http://localhost:${port}/api/interview`;
 
   try {
     const isabellaAnswers = [
