@@ -33,6 +33,17 @@
 - **Goal**: Implement the structured feedback and scorecard generator returning `{ summary, strengths, gaps, next }` upon interview completion, synthesizing candidate cohort signals and conversation transcript.
 - **Actions Taken**:
   - Created `FeedbackGenerator` in `src/interview/feedbackGenerator.ts` using Gemini structured output with candidate cohort signals and full interview transcript.
+  - Refined fallback generation to explicitly detail candidate-specific struggle missions, retry counts, and skipped topics.
   - Wired `FeedbackGenerator` into `src/routes/interviewRouter.ts` on final turns when `done: true`.
   - Created `scripts/testPhase4Feedback.ts` validating byte-for-byte schema compliance (`summary: string`, `strengths: string[]`, `gaps: string[]`, `next: string[]`) for both Isabella Rossi (`CAND-016`) and Emily Chen (`CAND-003`).
-- **Status**: Completed and verified. Awaiting user confirmation before committing and proceeding to Phase 5.
+- **Status**: Committed (`feat(phase-4): structured feedback and scorecard generation on interview completion`).
+
+## Phase 5: Frontend Chat UI & Scorecard View
+- **Goal**: Build a clean, minimal 2-screen frontend (React + Tailwind CSS style) with no marketing, no sign-in, and no extra navigation.
+- **Actions Taken**:
+  - Scaffolded React-TS frontend using Vite in `frontend/` directory.
+  - Created `ChatScreen.tsx` with real-time multi-turn conversation stream, candidate selector, typing indicators, and seamless `POST /api/interview` communication.
+  - Created `ScorecardScreen.tsx` rendering executive summary, strengths checklist, targeted technical gaps, actionable next steps, cohort metrics, and category progress bars.
+  - Configured `App.tsx` for seamless two-screen state management toggled by the backend `done: true` response.
+  - Configured Vite proxy and production build output to `dist/public`, served statically by `src/server.ts`.
+- **Status**: Completed and verified. Awaiting user confirmation before committing and proceeding to Phase 6.
