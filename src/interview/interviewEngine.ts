@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { InterviewSession, MessageTurn } from '../types/interview.js';
+import { InterviewSession } from '../types/interview.js';
 import { ShapedMission } from '../types/candidate.js';
 import { loadCurriculum } from '../loaders/curriculumLoader.js';
 
@@ -8,6 +8,8 @@ export interface GeneratedQuestionResult {
   dayReferenced?: number;
   isComplete: boolean;
 }
+
+export type EdgeCaseType = 'one_word' | 'dont_know' | 'off_topic' | 'normal';
 
 export class InterviewEngine {
   private static instance: InterviewEngine | null = null;
@@ -26,6 +28,33 @@ export class InterviewEngine {
       InterviewEngine.instance = new InterviewEngine();
     }
     return InterviewEngine.instance;
+  }
+
+  /**
+   * Classifies user input into standard or edge cases (one-word, "don't know", off-topic).
+   */
+  public detectEdgeCase(userAnswer: string): EdgeCaseType {
+    const clean = userAnswer.trim().toLowerCase();
+    const wordCount = clean.split(/\s+/).filter(Boolean).length;
+
+    // 1. "I don't know" / uncertainty patterns
+    const dontKnowPattern = /\b(i don'?t know|not sure|no idea|can'?t remember|cannot recall|didn'?t do|haven'?t used|unfamiliar|pass|no clue)\b/i;
+    if (dontKnowPattern.test(clean)) {
+      return 'dont_know';
+    }
+
+    // 2. Ultra-short / one-word answers
+    if (wordCount <= 2 && clean.length < 20) {
+      return 'one_word';
+    }
+
+    // 3. Off-topic detection
+    const offTopicPattern = /\b(weather|pizza|movie|recipe|football|joke|sing|dance|sports|lunch|dinner)\b/i;
+    if (offTopicPattern.test(clean) && !/\b(agent|vector|llm|rag|prompt|api|database|model)\b/i.test(clean)) {
+      return 'off_topic';
+    }
+
+    return 'normal';
   }
 
   /**
@@ -68,17 +97,16 @@ export class InterviewEngine {
    */
   public determineCurrentDay(session: InterviewSession): number {
     const targetDays = this.selectTargetDays(session);
-    const covered = Array.from(session.coveredDays);
 
     // If we haven't covered at least 4 days and have asked questions, pick next uncovered target day
     const uncovered = targetDays.filter(d => !session.coveredDays.has(d));
-    
+
     // We rotate or deepen every 1-2 questions
     const turnsOnCurrentTopic = session.history.filter(
       h => h.role === 'agent' && h.dayReferenced === session.history[session.history.length - 1]?.dayReferenced
     ).length;
 
-    if (uncovered.length > 0 && (turnsOnCurrentTopic >= 2 || session.questionCount === 0 || covered.length === 0)) {
+    if (uncovered.length > 0 && (turnsOnCurrentTopic >= 2 || session.questionCount === 0 || session.coveredDays.size === 0)) {
       return uncovered[0];
     }
 
@@ -151,8 +179,8 @@ ${hasStruggles && candidate.missionByDay[targetDay]?.outcome === 'failed' ? `Not
   }
 
   /**
-   * Generates a context-aware follow-up question or transitions to the next curriculum topic.
-   * Tracks total questions (minimum 8) and distinct day coverage (minimum 4 days).
+   * Generates a context-aware follow-up question, handles edge cases (one-word, "don't know", off-topic),
+   * or transitions to the next curriculum topic.
    */
   public async generateFollowUpQuestion(session: InterviewSession, latestUserMessage: string): Promise<GeneratedQuestionResult> {
     const candidate = session.candidateShaped;
@@ -170,6 +198,9 @@ ${hasStruggles && candidate.missionByDay[targetDay]?.outcome === 'failed' ? `Not
       };
     }
 
+    // Detect edge case in candidate message
+    const edgeCase = this.detectEdgeCase(latestUserMessage);
+
     // Determine target day for this turn
     const targetDay = this.determineCurrentDay(session);
     const dayInfo = curriculum.getDay(targetDay);
@@ -183,6 +214,15 @@ ${hasStruggles && candidate.missionByDay[targetDay]?.outcome === 'failed' ? `Not
     const isStruggleTopic = mission?.outcome === 'failed' || (mission?.attemptsCount && mission.attemptsCount >= 3);
     const isSkippedTopic = mission?.outcome === 'skipped';
     const isMasteryTopic = mission?.outcome === 'passed_first_try';
+
+    let edgeCaseGuidance = '';
+    if (edgeCase === 'one_word') {
+      edgeCaseGuidance = `EDGE CASE DETECTED (ONE-WORD/BRIEF ANSWER): The candidate provided a very brief or one-word response ("${latestUserMessage}"). Politely press them for concrete technical specifics, design reasoning, or implementation details. Do NOT crash or repeat the exact same prompt.`;
+    } else if (edgeCase === 'dont_know') {
+      edgeCaseGuidance = `EDGE CASE DETECTED (UNSURE / "DON'T KNOW"): The candidate expressed uncertainty or stated they don't know ("${latestUserMessage}"). Acknowledge their honesty constructively, provide a small conceptual nudge, and smoothly transition to probe their knowledge on Day ${targetDay}: "${dayInfo?.title}".`;
+    } else if (edgeCase === 'off_topic') {
+      edgeCaseGuidance = `EDGE CASE DETECTED (OFF-TOPIC ANSWER): The candidate gave an unrelated or off-topic answer ("${latestUserMessage}"). Politely acknowledge it and redirect the focus back to the technical topic at hand on Day ${targetDay}: "${dayInfo?.title}".`;
+    }
 
     const systemPrompt = `You are a Lead AI Engineer conducting a personalized technical interview.
 You are interviewing ${candidate.name} (${candidate.jobRole}, ${candidate.yearsExperience} yrs exp).
@@ -198,6 +238,8 @@ CANDIDATE SIGNALS ON THIS TOPIC:
 ${isStruggleTopic ? `- CANDIDATE STRUGGLED HERE: ${mission?.attemptsCount} attempts / failed. Probe their specific understanding, edge cases, and how they overcome failure.` : ''}
 ${isSkippedTopic ? `- CANDIDATE SKIPPED THIS TOPIC. Ask if they have foundational knowledge in this area and how they'd approach it.` : ''}
 ${isMasteryTopic ? `- CANDIDATE PASSED 1ST TRY. Ask challenging, high-depth architectural questions, performance bottlenecks, and system trade-offs.` : ''}
+
+${edgeCaseGuidance}
 
 CONVERSATION HISTORY:
 ${historyFormatted}
@@ -227,14 +269,15 @@ CRITICAL RULES:
       }
     }
 
-    // Dynamic Context-Aware Fallback
+    // Dynamic Context-Aware Fallback (with edge case handling)
     const fallbackReply = this.generateContextAwareFallback(
       candidate,
       dayInfo,
       mission,
       latestUserMessage,
       targetDay,
-      currentQuestionCount
+      currentQuestionCount,
+      edgeCase
     );
 
     return {
@@ -250,20 +293,36 @@ CRITICAL RULES:
     mission: ShapedMission | undefined,
     userAnswer: string,
     targetDay: number,
-    questionCount: number
+    questionCount: number,
+    edgeCase: EdgeCaseType = 'normal'
   ): string {
     const isStruggle = mission?.outcome === 'failed' || (mission?.attemptsCount && mission.attemptsCount >= 3);
     const isSkipped = mission?.outcome === 'skipped';
 
+    // Edge Case 1: One-word / ultra-short answer
+    if (edgeCase === 'one_word') {
+      return `You mentioned "${userAnswer.trim()}". Could you expand on the technical implementation details behind that? Specifically in Day ${targetDay} (${dayInfo?.title}), what architectural choices or trade-offs did you make when configuring ${dayInfo?.tools?.[0] || 'the system'}?`;
+    }
+
+    // Edge Case 2: "I don't know" / Unsure
+    if (edgeCase === 'dont_know') {
+      return `No problem—acknowledging gaps is an important engineering trait. Let's pivot slightly: when looking at Day ${targetDay} (${dayInfo?.title}) and working with ${dayInfo?.tools?.[0] || 'the core stack'}, how would you approach researching or testing a solution for ${dayInfo?.objectives?.[0] || 'this challenge'}?`;
+    }
+
+    // Edge Case 3: Off-topic
+    if (edgeCase === 'off_topic') {
+      return `Let's bring our focus back to your engineering work in the cohort. Looking at Day ${targetDay} (${dayInfo?.title}): when building with ${dayInfo?.tools?.slice(0, 2).join(' and ')}, how did you structure your components to ensure accuracy and error handling?`;
+    }
+
+    // Normal multi-turn routing
     if (questionCount <= 3) {
-      // Deep dive on current topic
       if (isStruggle) {
         return `You mentioned "${userAnswer.slice(0, 70)}...". Given your ${mission?.attemptsCount || 'multiple'} attempts on Day ${targetDay} (${dayInfo?.title}), how did you isolate bugs when testing this with ${dayInfo?.tools?.[0] || 'your pipeline'}, and what specific metric told you the implementation was finally sound?`;
       }
       return `Building on what you noted about "${userAnswer.slice(0, 70)}...", how would your approach scale when handling high-concurrency production traffic in ${dayInfo?.tools?.[0] || 'the system'}, and what failure modes would you monitor first?`;
     }
 
-    // Transitioning to new curriculum days (e.g. Day 12 Prompting, Day 22 Agents, Day 28 Deployment)
+    // Transitioning to new curriculum days
     if (isSkipped) {
       return `Understood. Shifting focus to Day ${targetDay} (${dayInfo?.title}), which was skipped in your cohort submissions: how would you approach configuring ${dayInfo?.tools?.join(' or ')} to meet production ${dayInfo?.objectives?.[0] || 'requirements'}?`;
     }

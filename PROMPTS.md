@@ -45,5 +45,16 @@
   - Created `ChatScreen.tsx` with real-time multi-turn conversation stream, candidate selector, typing indicators, and seamless `POST /api/interview` communication.
   - Created `ScorecardScreen.tsx` rendering executive summary, strengths checklist, targeted technical gaps, actionable next steps, cohort metrics, and category progress bars.
   - Configured `App.tsx` for seamless two-screen state management toggled by the backend `done: true` response.
-  - Configured Vite proxy and production build output to `dist/public`, served statically by `src/server.ts`.
-- **Status**: Completed and verified. Awaiting user confirmation before committing and proceeding to Phase 6.
+  - Made API base URL configurable via `VITE_API_URL` environment variable, defaulting to `http://localhost:3000`.
+- **Status**: Committed (`feat(phase-5): clean 2-screen frontend (chat interview & scorecard view) with configurable backend URL`).
+
+## Phase 6: Edge Cases Handling
+- **Goal**: Harden interview flow against one-word answers, uncertainty ("I don't know" / "not sure"), and off-topic responses without breaking the multi-turn session.
+- **Actions Taken**:
+  - Added input classification in `InterviewEngine` (`detectEdgeCase()`) identifying one-word/brief answers, uncertainty statements, and off-topic queries.
+  - Built custom guidance prompts and fallbacks:
+    - *One-word answers*: Prompts candidate for concrete technical specifics, tradeoffs, and design choices.
+    - *Uncertainty ("I don't know")*: Validates intellectual honesty constructively, offers conceptual guidance, and smoothly pivots to another curriculum objective.
+    - *Off-topic responses*: Gently and professionally redirects candidate back to their technical cohort work.
+  - Created automated test suite `scripts/testPhase6EdgeCases.ts` verifying complete interview execution through continuous edge cases without failure.
+- **Status**: Completed and verified. Awaiting user confirmation before committing and proceeding to Phase 7.

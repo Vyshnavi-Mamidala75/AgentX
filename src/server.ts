@@ -35,7 +35,7 @@ const publicPaths = [
 for (const p of publicPaths) {
   if (fs.existsSync(p)) {
     app.use(express.static(p));
-    app.get('*', (req, res, next) => {
+    app.use((req, res, next) => {
       if (req.path.startsWith('/api')) return next();
       res.sendFile(path.join(p, 'index.html'));
     });
