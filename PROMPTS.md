@@ -27,4 +27,12 @@
   - Integrated dynamic day-coverage tracking across turns to guarantee at least 4 distinct days across 8+ questions.
   - Connected `InterviewEngine` into `src/routes/interviewRouter.ts`.
   - Built `scripts/testPhase3Personalization.ts` to run full interviews for Isabella Rossi (`CAND-016`) and Emily Chen (`CAND-003`), demonstrating visibly distinct, personalized question sequences and contextual follow-ups.
-- **Status**: Completed and verified. Awaiting user confirmation before committing and proceeding to Phase 4.
+- **Status**: Committed (`feat(phase-3): real interview logic with Gemini API and signal personalization`).
+
+## Phase 4: Feedback & Scorecard Generation on `done: true` Turn
+- **Goal**: Implement the structured feedback and scorecard generator returning `{ summary, strengths, gaps, next }` upon interview completion, synthesizing candidate cohort signals and conversation transcript.
+- **Actions Taken**:
+  - Created `FeedbackGenerator` in `src/interview/feedbackGenerator.ts` using Gemini structured output with candidate cohort signals and full interview transcript.
+  - Wired `FeedbackGenerator` into `src/routes/interviewRouter.ts` on final turns when `done: true`.
+  - Created `scripts/testPhase4Feedback.ts` validating byte-for-byte schema compliance (`summary: string`, `strengths: string[]`, `gaps: string[]`, `next: string[]`) for both Isabella Rossi (`CAND-016`) and Emily Chen (`CAND-003`).
+- **Status**: Completed and verified. Awaiting user confirmation before committing and proceeding to Phase 5.

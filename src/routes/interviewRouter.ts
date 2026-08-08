@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { getSessionStore } from '../session/sessionStore.js';
-import { InterviewResponse, FeedbackData } from '../types/interview.js';
+import { InterviewResponse } from '../types/interview.js';
 import { RawCandidate } from '../types/candidate.js';
 import { getInterviewEngine } from '../interview/interviewEngine.js';
+import { getFeedbackGenerator } from '../interview/feedbackGenerator.js';
 
 export const interviewRouter = Router();
 
@@ -27,6 +28,7 @@ interviewRouter.post('/interview', async (req: Request, res: Response): Promise<
 
     const sessionStore = getSessionStore();
     const interviewEngine = getInterviewEngine();
+    const feedbackGenerator = getFeedbackGenerator();
     let session = sessionStore.getSession(sessionId);
 
     // 1. Start Interview (First Request)
@@ -77,27 +79,13 @@ interviewRouter.post('/interview', async (req: Request, res: Response): Promise<
       timestamp: Date.now(),
     });
 
-    // Check if session is already completed or reaches completion in this turn
+    // Check if session is already completed
     if (session.isComplete) {
-      const stubFeedback: FeedbackData = {
-        summary: `Technical evaluation completed for ${session.candidateShaped.name}. Candidate demonstrated strong engagement across covered cohort modules.`,
-        strengths: [
-          `Strong foundational knowledge in ${session.candidateShaped.jobRole} workflows.`,
-          `High persistence through multi-turn problem solving.`,
-        ],
-        gaps: [
-          `Further reinforcement recommended in advanced orchestration and production guardrails.`,
-        ],
-        next: [
-          `Implement end-to-end integration tests for multi-agent workflows.`,
-          `Deep dive into containerized evaluation pipelines.`,
-        ],
-      };
-
+      const feedback = await feedbackGenerator.generateFeedback(session);
       const finalResponse: InterviewResponse = {
         reply: 'Interview completed.',
         done: true,
-        feedback: stubFeedback,
+        feedback,
       };
 
       res.status(200).json(finalResponse);
@@ -110,24 +98,13 @@ interviewRouter.post('/interview', async (req: Request, res: Response): Promise<
     if (turnResult.isComplete) {
       sessionStore.markComplete(sessionId);
 
-      const stubFeedback: FeedbackData = {
-        summary: `Technical evaluation completed for ${session.candidateShaped.name}. Completed full multi-turn interview covering ${session.coveredDays.size} curriculum days.`,
-        strengths: [
-          `Articulated design rationale for core mission architectures.`,
-          `Effective communication under targeted technical probing.`,
-        ],
-        gaps: [
-          `Needs additional exposure to skipped and high-attempt module topics.`,
-        ],
-        next: [
-          `Review production observability and deployment best practices.`,
-        ],
-      };
+      // Generate full structured feedback / scorecard
+      const feedback = await feedbackGenerator.generateFeedback(session);
 
       const finalResponse: InterviewResponse = {
         reply: turnResult.reply,
         done: true,
-        feedback: stubFeedback,
+        feedback,
       };
 
       res.status(200).json(finalResponse);

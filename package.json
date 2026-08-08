@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "test:loaders": "tsx scripts/testLoaders.ts",
     "test:contract": "tsx scripts/testPhase2Contract.ts",
-    "test:phase3": "tsx scripts/testPhase3Personalization.ts"
+    "test:phase3": "tsx scripts/testPhase3Personalization.ts",
+    "test:phase4": "tsx scripts/testPhase4Feedback.ts"
   },
   "dependencies": {
     "@google/genai": "^2.16.0",
