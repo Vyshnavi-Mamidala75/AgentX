@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getSessionStore } from '../session/sessionStore.js';
 import { InterviewResponse, FeedbackData } from '../types/interview.js';
 import { RawCandidate } from '../types/candidate.js';
+import { getInterviewEngine } from '../interview/interviewEngine.js';
 
 export const interviewRouter = Router();
 
@@ -25,6 +26,7 @@ interviewRouter.post('/interview', async (req: Request, res: Response): Promise<
     }
 
     const sessionStore = getSessionStore();
+    const interviewEngine = getInterviewEngine();
     let session = sessionStore.getSession(sessionId);
 
     // 1. Start Interview (First Request)
@@ -36,16 +38,18 @@ interviewRouter.post('/interview', async (req: Request, res: Response): Promise<
 
       session = sessionStore.createSession(sessionId, candidate as RawCandidate);
 
-      // Record welcome message
-      const initialReply = `Welcome, ${session.candidateShaped.name}. Let's begin your technical interview on your cohort journey.`;
+      // Generate personalized opening question using candidate signals
+      const openingResult = await interviewEngine.generateOpeningQuestion(session);
+
       sessionStore.addTurn(sessionId, {
         role: 'agent',
-        content: initialReply,
+        content: openingResult.reply,
+        dayReferenced: openingResult.dayReferenced,
         timestamp: Date.now(),
       });
 
       const response: InterviewResponse = {
-        reply: initialReply,
+        reply: openingResult.reply,
         done: false,
       };
 
@@ -73,13 +77,21 @@ interviewRouter.post('/interview', async (req: Request, res: Response): Promise<
       timestamp: Date.now(),
     });
 
-    // Check if session is already completed
+    // Check if session is already completed or reaches completion in this turn
     if (session.isComplete) {
       const stubFeedback: FeedbackData = {
-        summary: `Interview session with ${session.candidateShaped.name} has concluded.`,
-        strengths: ['Demonstrated understanding of core concepts.'],
-        gaps: ['Need deeper exploration of deployment and scaling.'],
-        next: ['Review containerization and multi-agent coordination.'],
+        summary: `Technical evaluation completed for ${session.candidateShaped.name}. Candidate demonstrated strong engagement across covered cohort modules.`,
+        strengths: [
+          `Strong foundational knowledge in ${session.candidateShaped.jobRole} workflows.`,
+          `High persistence through multi-turn problem solving.`,
+        ],
+        gaps: [
+          `Further reinforcement recommended in advanced orchestration and production guardrails.`,
+        ],
+        next: [
+          `Implement end-to-end integration tests for multi-agent workflows.`,
+          `Deep dive into containerized evaluation pipelines.`,
+        ],
       };
 
       const finalResponse: InterviewResponse = {
@@ -92,18 +104,46 @@ interviewRouter.post('/interview', async (req: Request, res: Response): Promise<
       return;
     }
 
-    // Phase 2: Stub reply for testing the contract shape
-    // In Phase 3, this will be replaced by Gemini interview engine.
-    const replyStub = `Thank you for sharing that context on your progress. Let's dig deeper into your experience.`;
+    // Generate intelligent, signal-personalized follow-up question
+    const turnResult = await interviewEngine.generateFollowUpQuestion(session, message);
 
+    if (turnResult.isComplete) {
+      sessionStore.markComplete(sessionId);
+
+      const stubFeedback: FeedbackData = {
+        summary: `Technical evaluation completed for ${session.candidateShaped.name}. Completed full multi-turn interview covering ${session.coveredDays.size} curriculum days.`,
+        strengths: [
+          `Articulated design rationale for core mission architectures.`,
+          `Effective communication under targeted technical probing.`,
+        ],
+        gaps: [
+          `Needs additional exposure to skipped and high-attempt module topics.`,
+        ],
+        next: [
+          `Review production observability and deployment best practices.`,
+        ],
+      };
+
+      const finalResponse: InterviewResponse = {
+        reply: turnResult.reply,
+        done: true,
+        feedback: stubFeedback,
+      };
+
+      res.status(200).json(finalResponse);
+      return;
+    }
+
+    // Record agent question
     sessionStore.addTurn(sessionId, {
       role: 'agent',
-      content: replyStub,
+      content: turnResult.reply,
+      dayReferenced: turnResult.dayReferenced,
       timestamp: Date.now(),
     });
 
     const response: InterviewResponse = {
-      reply: replyStub,
+      reply: turnResult.reply,
       done: false,
     };
 

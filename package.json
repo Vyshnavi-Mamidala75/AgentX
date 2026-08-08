@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test:loaders": "tsx scripts/testLoaders.ts",
-    "test:contract": "tsx scripts/testPhase2Contract.ts"
+    "test:contract": "tsx scripts/testPhase2Contract.ts",
+    "test:phase3": "tsx scripts/testPhase3Personalization.ts"
   },
   "dependencies": {
     "@google/genai": "^2.16.0",

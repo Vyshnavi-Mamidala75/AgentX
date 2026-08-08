@@ -14,10 +14,17 @@
 - **Goal**: Implement the single required HTTP endpoint `POST /api/interview` strictly conforming to `technical-spec.md` contract shapes (Start Interview, Conversation Turn, and End Interview with Feedback), maintaining in-memory session state across requests.
 - **Actions Taken**:
   - Built `SessionStore` (`src/session/sessionStore.ts`) with in-memory map keyed by `sessionId`, storing candidate profile, message history, covered curriculum days, and completion status.
-  - Implemented Express endpoint `POST /api/interview` in `src/routes/interviewRouter.ts` handling:
-    1. First request with `candidate` payload -> `{ reply: string, done: false }`
-    2. Subsequent turn requests with `message` payload -> `{ reply: string, done: false }`
-    3. End of interview -> `{ reply: string, done: true, feedback: { summary, strengths, gaps, next } }`
+  - Implemented Express endpoint `POST /api/interview` in `src/routes/interviewRouter.ts` handling start/turn/end flows.
   - Created Express server in `src/server.ts` with CORS and JSON body parser.
-  - Built comprehensive automated contract test in `scripts/testPhase2Contract.ts` verifying exact schema shapes, status codes, and multi-turn state persistence.
-- **Status**: Completed and verified. Awaiting user confirmation before committing and proceeding to Phase 3.
+  - Built automated contract test in `scripts/testPhase2Contract.ts` verifying exact schema shapes, status codes, and multi-turn state persistence.
+- **Status**: Committed (`feat(phase-2): implement POST /api/interview contract with in-memory session persistence`).
+
+## Phase 3: Real Interview Logic (Gemini API & Signal-Based Personalization)
+- **Goal**: Implement dynamic question generation and context-aware follow-up engine using `@google/genai`, candidate signals (attempts, passed, skipped, commitDays), and cohort curriculum tracking (minimum 8 questions, at least 4 distinct days).
+- **Actions Taken**:
+  - Built `InterviewEngine` in `src/interview/interviewEngine.ts` integrating `@google/genai` (with `gemini-2.5-flash`) and context-aware multi-turn routing.
+  - Implemented signal-based strategy: candidates with struggles/failures receive targeted root-cause debugging questions and probing on skipped topics; high performers receive high-depth architectural scaling and trade-off challenges.
+  - Integrated dynamic day-coverage tracking across turns to guarantee at least 4 distinct days across 8+ questions.
+  - Connected `InterviewEngine` into `src/routes/interviewRouter.ts`.
+  - Built `scripts/testPhase3Personalization.ts` to run full interviews for Isabella Rossi (`CAND-016`) and Emily Chen (`CAND-003`), demonstrating visibly distinct, personalized question sequences and contextual follow-ups.
+- **Status**: Completed and verified. Awaiting user confirmation before committing and proceeding to Phase 4.
